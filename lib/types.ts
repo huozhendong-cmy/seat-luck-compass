@@ -135,7 +135,7 @@ export type KiePosterState =
 export type KiePosterResult = {
   taskId: string;
   state: KiePosterState;
-  progress?: number;
+  progress?: number | string;
   imageUrls: string[];
   failMsg?: string;
 };

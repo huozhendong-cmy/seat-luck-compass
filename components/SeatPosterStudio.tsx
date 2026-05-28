@@ -59,6 +59,26 @@ function verdictClass(verdict: SeatZoneMarkup["verdict"]) {
   return "border-[rgba(179,120,97,0.24)] bg-[rgba(246,224,216,0.82)] text-[#875947]";
 }
 
+function isPosterFinished(result: KiePosterResult) {
+  return (
+    result.state === "success" ||
+    result.state === "fail" ||
+    result.imageUrls.length > 0
+  );
+}
+
+function posterStateLabel(result: KiePosterResult | null) {
+  if (!result) {
+    return "generating";
+  }
+
+  if (result.imageUrls.length > 0 && result.state !== "fail") {
+    return "success";
+  }
+
+  return result.state;
+}
+
 export function SeatPosterStudio({
   embedded = false,
   environment = null,
@@ -154,13 +174,13 @@ export function SeatPosterStudio({
 
         setPosterResult(data);
 
-        if (data.state === "success" || data.state === "fail") {
+        if (isPosterFinished(data)) {
           setPosterLoading(false);
           return;
         }
 
-        if (attempts >= 24) {
-          setError("图片服务响应有点慢，你可以稍后重试，或先使用文字建议卡。");
+        if (attempts >= 48) {
+          setError("海报生成比平时更慢一些，你可以稍后回来查看，或先使用文字建议卡。");
           setPosterLoading(false);
           return;
         }
@@ -559,9 +579,9 @@ export function SeatPosterStudio({
               任务 ID <b>{posterTaskId}</b>
             </div>
             <div className="result-badge">
-              当前状态 <b>{posterResult?.state ?? "generating"}</b>
+              当前状态 <b>{posterStateLabel(posterResult)}</b>
             </div>
-            {typeof posterResult?.progress === "number" ? (
+            {typeof posterResult?.progress !== "undefined" ? (
               <div className="result-badge">
                 进度 <b>{posterResult.progress}</b>
               </div>
@@ -571,7 +591,7 @@ export function SeatPosterStudio({
           {posterLoading ? (
             <div className="mt-4 result-section">
               <strong>任务处理中</strong>
-              <p>正在根据原图和前面填写的信息生成成品海报图，页面会自动刷新任务状态。</p>
+              <p>正在根据原图和前面填写的信息生成成品海报图。线上通常需要 20 到 90 秒，页面会自动刷新任务状态。</p>
             </div>
           ) : null}
 
@@ -582,7 +602,7 @@ export function SeatPosterStudio({
             </div>
           ) : null}
 
-          {posterResult?.state === "success" && posterResult.imageUrls.length > 0 ? (
+          {posterResult && posterResult.imageUrls.length > 0 && posterResult.state !== "fail" ? (
             <div className="mt-4 space-y-4">
               {posterResult.imageUrls.map((imageUrl, index) => (
                 <div
