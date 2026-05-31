@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { upsertPosterJobRecord } from "@/lib/supabase-records";
 import type { KiePosterResult } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -176,6 +177,18 @@ export async function GET(request: Request) {
       imageUrls,
       failMsg,
     };
+
+    try {
+      await upsertPosterJobRecord({
+        taskId: result.taskId,
+        status: result.state,
+        progress: result.progress,
+        resultImageUrls: result.imageUrls,
+        errorMessage: result.failMsg,
+      });
+    } catch (recordError) {
+      console.error("poster status sync failed", recordError);
+    }
 
     return NextResponse.json(result);
   } catch (error) {

@@ -12,6 +12,7 @@
 - 支持图片上传隐私提示、大小校验、超时与失败兜底
 - 支持输入提示词，调用 Kie 图片接口生成图片并回传到 H5
 - 使用 `localStorage` 保存最近 5 次测试记录
+- 可选接入 `Supabase`，把测试结果和海报任务状态存到后台
 - 不需要登录，不需要数据库
 
 ## 本地运行
@@ -20,6 +21,7 @@
 npm install
 cp .env.example .env.local
 # 在 .env.local 中填入 KIE_API_KEY
+# 如需后台留存，再补 SUPABASE_URL 和 SUPABASE_PUBLISHABLE_KEY
 npm run dev
 ```
 
@@ -52,12 +54,36 @@ npm run build
 npm run start
 ```
 
+## Supabase 数据留存
+
+如果你想在后台查看用户提交记录，可以接入 `Supabase`：
+
+1. 在 Supabase 的 SQL Editor 运行：
+   - [supabase/schema.sql](/Users/mac/Documents/Playground/seat-luck-compass/supabase/schema.sql)
+2. 在环境变量中新增：
+   - `SUPABASE_URL`
+   - `SUPABASE_PUBLISHABLE_KEY`
+   - 可选：`SUPABASE_SERVICE_ROLE_KEY`
+3. 重新部署后，新的用户提交会自动写入两张表：
+   - `submissions`
+   - `poster_jobs`
+
+查看位置：
+- Supabase `Table Editor -> submissions`
+- Supabase `Table Editor -> poster_jobs`
+
+其中：
+- `submissions` 记录每次结果卡生成时的输入和输出
+- `poster_jobs` 记录环境图海报任务 ID、状态和生成结果
+
 ## 上线前核对清单
 
 - 在 `.env.local` 或部署平台中配置：
   - `KIE_API_KEY`
   - `KIE_API_BASE_URL`
   - `NEXT_PUBLIC_SITE_URL`
+  - 可选：`SUPABASE_URL`
+  - 可选：`SUPABASE_PUBLISHABLE_KEY`
 - 本地执行一次 `npm run build`，确认构建通过
 - 真机测试完整流程：
   - 首页 -> 表单页 -> 环境页 -> 结果页

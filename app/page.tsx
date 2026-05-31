@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { trackEvent } from "@/lib/analytics";
 
 export default function HomePage() {
   return (
@@ -62,13 +63,49 @@ export default function HomePage() {
 
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-3">
-            <Link href="/form" className="button-primary h-14 w-full text-base">
+            <Link
+              href="/form"
+              className="button-primary h-14 w-full text-base"
+              onClick={() =>
+                trackEvent({
+                  eventName: "home_cta_click",
+                  metadata: {
+                    target: "/form",
+                    label: "开始测一测",
+                  },
+                })
+              }
+            >
               开始测一测
             </Link>
-            <Link href="/analyze" className="button-secondary h-14 w-full text-base">
+            <Link
+              href="/analyze"
+              className="button-secondary h-14 w-full text-base"
+              onClick={() =>
+                trackEvent({
+                  eventName: "analyze_cta_click",
+                  metadata: {
+                    target: "/analyze",
+                    label: "上传座位图做海报",
+                  },
+                })
+              }
+            >
               上传座位图做海报
             </Link>
-            <Link href="/generate" className="button-secondary h-14 w-full text-base">
+            <Link
+              href="/generate"
+              className="button-secondary h-14 w-full text-base"
+              onClick={() =>
+                trackEvent({
+                  eventName: "generate_cta_click",
+                  metadata: {
+                    target: "/generate",
+                    label: "提示词生成图",
+                  },
+                })
+              }
+            >
               提示词生成图
             </Link>
           </div>

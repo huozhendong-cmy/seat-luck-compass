@@ -139,3 +139,65 @@ export type KiePosterResult = {
   imageUrls: string[];
   failMsg?: string;
 };
+
+export type AnalyticsEventName =
+  | "page_view"
+  | "home_cta_click"
+  | "analyze_cta_click"
+  | "generate_cta_click"
+  | "profile_continue"
+  | "result_generated"
+  | "poster_generate_start"
+  | "poster_generate_success"
+  | "poster_generate_fail"
+  | "image_analysis_start"
+  | "image_analysis_success"
+  | "image_analysis_fail";
+
+export type AnalyticsEventPayload = {
+  eventName: AnalyticsEventName;
+  path: string;
+  visitorId: string;
+  sessionId: string;
+  createdAtClient?: string;
+  referrer?: string | null;
+  userAgent?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+export type AnalyticsEventRow = {
+  id: string;
+  createdAt: string;
+  eventName: string;
+  path: string;
+  visitorId: string;
+  sessionId: string;
+  referrer: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+export type AnalyticsDashboardData = {
+  pageViews: number;
+  uniqueVisitors: number;
+  uniqueSessions: number;
+  completedResults: number;
+  posterJobs: number;
+  posterSuccessCount: number;
+  posterFailCount: number;
+  posterSuccessRate: number;
+  funnel: Array<{
+    label: string;
+    value: number;
+    ratio: number;
+  }>;
+  topPages: Array<{
+    path: string;
+    views: number;
+  }>;
+  dailyTrend: Array<{
+    date: string;
+    views: number;
+    results: number;
+  }>;
+  recentActivity: AnalyticsEventRow[];
+};

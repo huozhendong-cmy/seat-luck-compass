@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { OptionGrid } from "@/components/OptionGrid";
 import { SectionHeading } from "@/components/SectionHeading";
+import { trackEvent } from "@/lib/analytics";
 import { getProfileDraft, saveProfileDraft } from "@/lib/storage";
 import {
   budgetOptions,
@@ -175,6 +176,16 @@ export default function FormPage() {
         disabled={!canSubmit}
         className="button-primary h-14 w-full text-base disabled:cursor-not-allowed disabled:opacity-45"
         onClick={() => {
+          trackEvent({
+            eventName: "profile_continue",
+            metadata: {
+              zodiac: form.zodiac,
+              birthMonth: form.birthMonth,
+              mood: form.mood,
+              budgetOption: form.budgetOption,
+              goal: form.goal,
+            },
+          });
           saveProfileDraft(form);
           router.push("/environment");
         }}

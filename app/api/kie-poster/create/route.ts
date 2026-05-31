@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { upsertPosterJobRecord } from "@/lib/supabase-records";
 import type {
   EnvironmentDraft,
   ProfileDraft,
@@ -194,6 +195,19 @@ export async function POST(request: Request) {
         { error: taskData.msg || "Kie 海报任务创建失败。" },
         { status: 500 },
       );
+    }
+
+    try {
+      await upsertPosterJobRecord({
+        taskId,
+        status: "generating",
+        profile,
+        environment,
+        markup,
+        resultImageUrls: [],
+      });
+    } catch (recordError) {
+      console.error("poster job sync failed", recordError);
     }
 
     return NextResponse.json({ taskId });

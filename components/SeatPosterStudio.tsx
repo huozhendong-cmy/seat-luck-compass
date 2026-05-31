@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { SectionHeading } from "@/components/SectionHeading";
+import { trackEvent } from "@/lib/analytics";
 import { getProfileDraft } from "@/lib/storage";
 import type {
   EnvironmentDraft,
@@ -84,6 +85,7 @@ export function SeatPosterStudio({
   environment = null,
 }: SeatPosterStudioProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const posterFinishRef = useRef<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState("");
@@ -149,6 +151,7 @@ export function SeatPosterStudio({
 
   useEffect(() => {
     if (!posterTaskId) {
+      posterFinishRef.current = "";
       return;
     }
 
@@ -205,6 +208,42 @@ export function SeatPosterStudio({
     };
   }, [posterTaskId]);
 
+  useEffect(() => {
+    if (!posterTaskId || !posterResult) {
+      return;
+    }
+
+    const finishKey = `${posterTaskId}:${posterResult.state}:${posterResult.imageUrls.join(",")}`;
+
+    if (posterFinishRef.current === finishKey) {
+      return;
+    }
+
+    if (posterResult.imageUrls.length > 0 && posterResult.state !== "fail") {
+      posterFinishRef.current = finishKey;
+      trackEvent({
+        eventName: "poster_generate_success",
+        metadata: {
+          taskId: posterTaskId,
+          imageCount: posterResult.imageUrls.length,
+          progress: posterResult.progress ?? null,
+        },
+      });
+      return;
+    }
+
+    if (posterResult.state === "fail") {
+      posterFinishRef.current = finishKey;
+      trackEvent({
+        eventName: "poster_generate_fail",
+        metadata: {
+          taskId: posterTaskId,
+          failMsg: posterResult.failMsg ?? "unknown",
+        },
+      });
+    }
+  }, [posterResult, posterTaskId]);
+
   async function handleAnalyze() {
     if (!file) {
       setError("请先上传一张座位图片。");
@@ -214,6 +253,13 @@ export function SeatPosterStudio({
     setLoading(true);
     setError("");
     setMarkup(null);
+    trackEvent({
+      eventName: "image_analysis_start",
+      metadata: {
+        fileSize: file.size,
+        embedded,
+      },
+    });
 
     try {
       const nextImageDataUrl = await toDataUrl(file);
@@ -235,7 +281,20 @@ export function SeatPosterStudio({
       }
 
       setMarkup(data.markup);
+      trackEvent({
+        eventName: "image_analysis_success",
+        metadata: {
+          zoneCount: data.markup.zones.length,
+          confidence: data.markup.confidence,
+        },
+      });
     } catch (requestError) {
+      trackEvent({
+        eventName: "image_analysis_fail",
+        metadata: {
+          message: requestError instanceof Error ? requestError.message : "unknown",
+        },
+      });
       setError(
         requestError instanceof Error ? requestError.message : "标注失败，请稍后再试。",
       );
@@ -253,6 +312,16 @@ export function SeatPosterStudio({
     setPosterLoading(true);
     setPosterResult(null);
     setError("");
+    posterFinishRef.current = "";
+    trackEvent({
+      eventName: "poster_generate_start",
+      metadata: {
+        embedded,
+        hasMarkup: Boolean(markup),
+        mood: profile?.mood ?? null,
+        goal: profile?.goal ?? null,
+      },
+    });
 
     try {
       const nextImageDataUrl = imageDataUrl || (await toDataUrl(file));
@@ -279,6 +348,13 @@ export function SeatPosterStudio({
 
       setPosterTaskId(data.taskId);
     } catch (posterError) {
+      trackEvent({
+        eventName: "poster_generate_fail",
+        metadata: {
+          taskId: posterTaskId || null,
+          failMsg: posterError instanceof Error ? posterError.message : "create_failed",
+        },
+      });
       setError(
         posterError instanceof Error ? posterError.message : "海报任务创建失败。",
       );

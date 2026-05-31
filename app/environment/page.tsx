@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { OptionGrid } from "@/components/OptionGrid";
 import { SeatPosterStudio } from "@/components/SeatPosterStudio";
 import { SectionHeading } from "@/components/SectionHeading";
+import { trackEvent } from "@/lib/analytics";
 import { generateResult } from "@/lib/logic";
+import { syncSubmissionRecord } from "@/lib/submission-sync";
 import {
   getEnvironmentDraft,
   getProfileDraft,
@@ -32,6 +34,7 @@ const defaultEnvironment: EnvironmentDraft = {
 export default function EnvironmentPage() {
   const router = useRouter();
   const [form, setForm] = useState<EnvironmentDraft>(defaultEnvironment);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const profile = getProfileDraft();
@@ -163,7 +166,7 @@ export default function EnvironmentPage() {
         </button>
         <button
           type="button"
-          disabled={!canSubmit}
+          disabled={!canSubmit || submitting}
           className="button-primary h-14 text-sm disabled:cursor-not-allowed disabled:opacity-45"
           onClick={() => {
             const profile = getProfileDraft();
@@ -172,13 +175,27 @@ export default function EnvironmentPage() {
               return;
             }
 
+            setSubmitting(true);
             saveEnvironmentDraft(form);
             const result = generateResult({ ...profile, ...form });
             saveCurrentResult(result);
+            trackEvent({
+              eventName: "result_generated",
+              metadata: {
+                recommendedSeat: result.recommendedSeat,
+                discouragedSeat: result.discouragedSeat,
+                totalScore: result.totalScore,
+                mood: profile.mood,
+                goal: profile.goal,
+                light: form.light,
+                noise: form.noise,
+              },
+            });
+            syncSubmissionRecord(result);
             router.push("/result");
           }}
         >
-          生成结果卡
+          {submitting ? "提交中..." : "生成结果卡"}
         </button>
       </div>
 
