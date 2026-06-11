@@ -1,4 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/server/auth";
+import {
+  IMAGE_ANALYSIS_COST,
+  consumeCredits,
+  createImageTask,
+  markImageTaskRefunded,
+  refundCredits,
+  updateImageTaskById,
+} from "@/lib/server/user-store";
 import type { SeatLayoutMarkup } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -163,7 +172,31 @@ export async function POST(request: Request) {
     );
   }
 
+  let authUserId = "";
+  let localTaskId = "";
+  let creditsConsumed = false;
+
   try {
+    const auth = await requireAuth();
+    authUserId = auth.user.id;
+
+    const task = await createImageTask({
+      userId: auth.user.id,
+      taskType: "analysis",
+      status: "pending",
+      creditsCost: IMAGE_ANALYSIS_COST,
+      inputPayload: {
+        kind: "seat_image_analysis",
+      },
+    });
+    localTaskId = task.id;
+
+    await consumeCredits(auth.user.id, IMAGE_ANALYSIS_COST, "image_analysis", localTaskId);
+    creditsConsumed = true;
+    await updateImageTaskById(localTaskId, {
+      status: "processing",
+    });
+
     const response = await fetchWithTimeout(`${kieBaseUrl}/codex/v1/responses`, {
       method: "POST",
       headers: {
@@ -210,28 +243,40 @@ export async function POST(request: Request) {
     };
 
     if (!response.ok) {
-      return NextResponse.json(
-        {
-          error:
-            payload.error?.message || payload.message || "Kie 座位图分析失败。",
-        },
-        { status: 500 },
-      );
+      throw new Error(payload.error?.message || payload.message || "Kie 座位图分析失败。");
     }
 
     const outputText = extractOutputText(payload);
 
     if (!outputText) {
-      return NextResponse.json(
-        { error: "模型没有返回可解析的标注结果。" },
-        { status: 500 },
-      );
+      throw new Error("模型没有返回可解析的标注结果。");
     }
 
     const markup = normalizeMarkup(JSON.parse(outputText) as SeatLayoutMarkup);
 
+    await updateImageTaskById(localTaskId, {
+      status: "success",
+      outputPayload: markup,
+    });
+
     return NextResponse.json({ markup });
   } catch (error) {
+    if (localTaskId) {
+      await updateImageTaskById(localTaskId, {
+        status: "failed",
+        errorMessage: error instanceof Error ? error.message : "座位图分析失败。",
+      }).catch(() => null);
+    }
+
+    if (creditsConsumed && authUserId && localTaskId) {
+      await refundCredits(authUserId, IMAGE_ANALYSIS_COST, "image_analysis_refund", localTaskId).catch(() => null);
+      await markImageTaskRefunded(localTaskId).catch(() => null);
+    }
+
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "请先登录后再继续。" }, { status: 401 });
+    }
+
     if (error instanceof Error && error.name === "AbortError") {
       return NextResponse.json(
         {

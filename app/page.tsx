@@ -1,127 +1,158 @@
 "use client";
 
 import Link from "next/link";
+import { AppScaffold } from "@/components/AppScaffold";
+import { PaperIcon } from "@/components/PaperIcon";
+import { PaperCompass } from "@/components/PaperCompass";
 import { trackEvent } from "@/lib/analytics";
+
+const homeCards = [
+  {
+    href: "/form",
+    icon: "compass",
+    title: "开始测算",
+    description: "校准状态，获取座位建议",
+    eventName: "home_cta_click" as const,
+  },
+  {
+    href: "/analyze",
+    icon: "image",
+    title: "上传座位图",
+    description: "上传现场或座位平面图",
+    eventName: "analyze_cta_click" as const,
+  },
+  {
+    href: "/records",
+    icon: "history",
+    title: "历史记录",
+    description: "查看过往结果与记录",
+    eventName: "home_cta_click" as const,
+  },
+] as const;
+
+const processItems = [
+  { number: 1, icon: "user" as const, title: "状态校准", copy: "完善个人状态" },
+  { number: 2, icon: "home" as const, title: "环境选择", copy: "选择场景与环境" },
+  { number: 3, icon: "upload" as const, title: "上传分析", copy: "上传座位图分析" },
+  { number: 4, icon: "record" as const, title: "查看建议", copy: "获取座位建议" },
+] as const;
 
 export default function HomePage() {
   return (
-    <main className="page-wrap page-stack justify-between">
-      <section className="hero-reveal flex flex-1 flex-col justify-between py-2">
-        <div>
-          <div className="topbar">
-            <div className="brand-mark">
-              <div className="brand-seal" />
-              <div className="brand-meta">
-                <strong>Seat Luck Compass</strong>
-                <span>座位状态提醒卡</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-7 pt-6">
-            <div className="eyebrow mb-4">Today Reading</div>
-            <h1 className="display-font text-[54px] leading-[0.98] tracking-[0.04em] text-[var(--text)]">
-              今日
-              <br />
-              座位罗盘
-            </h1>
-            <p className="mt-5 max-w-[18ch] text-[17px] leading-8 text-[var(--muted)]">
-              入场前测一测，生成你的今日推荐座位、进入节奏和状态提醒卡。
+    <AppScaffold
+      title="今日座位罗盘"
+      subtitle="座位仪轨 · 首页"
+      ornamentedTitle
+      activeNav="home"
+    >
+      <section className="paper-home-hero paper-home-clean">
+        <div className="paper-hero-stage paper-home-stage">
+          <PaperCompass
+            size="md"
+            className="paper-home-hero-compass"
+            showPalm={false}
+            showDirections={false}
+            showBranches={false}
+            showCoreDots={false}
+          />
+          <div className="paper-home-stage-copy">
+            <div className="paper-home-kicker">座位仪轨 · 今日启盘</div>
+            <h2 className="paper-home-title">今日座位罗盘</h2>
+            <p className="paper-home-copy">
+              入场前先校准状态，再补充环境，最后拿到更稳的座位建议和节奏提醒。
             </p>
-            <p className="subtle-note">不讲玄乎承诺，只帮你在进场前把位置、心气和节奏感调到更舒服。</p>
           </div>
-
-          <div className="hero-poster mb-7">
-            <div className="ring" />
-            <div className="mb-6 flex items-center justify-center">
-              <div className="compass-core scale-[0.94]">
-                <div className="compass-orbit" />
-              </div>
+          <div className="paper-home-statline">
+            <div className="paper-home-stat">
+              <strong>5 项</strong>
+              <span>状态校准</span>
             </div>
-            <div className="mb-5 text-center">
-              <div className="eyebrow justify-center">Compass Mood</div>
-              <p className="mx-auto mt-3 max-w-[21ch] text-sm leading-7 text-[var(--muted)]">
-                先找稳，再找顺眼的位置，让今天入场少一点躁感，多一点分寸。
-              </p>
+            <div className="paper-home-stat">
+              <strong>4 屏</strong>
+              <span>完整流程</span>
             </div>
-            <div className="hero-stat-grid">
-              <div className="hero-stat">
-                <strong>稳</strong>
-                <span>先看节奏</span>
-              </div>
-              <div className="hero-stat">
-                <strong>静</strong>
-                <span>先挑位置</span>
-              </div>
-              <div className="hero-stat">
-                <strong>准</strong>
-                <span>先收状态</span>
-              </div>
+            <div className="paper-home-stat">
+              <strong>1 次</strong>
+              <span>生成结果</span>
             </div>
           </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-3">
+          <div className="paper-home-primary">
             <Link
               href="/form"
-              className="button-primary h-14 w-full text-base"
+              className="paper-primary-cta"
               onClick={() =>
                 trackEvent({
                   eventName: "home_cta_click",
                   metadata: {
                     target: "/form",
-                    label: "开始测一测",
+                    label: "开始测算",
                   },
                 })
               }
             >
-              开始测一测
+              立即开始测算 ✦
             </Link>
-            <Link
-              href="/analyze"
-              className="button-secondary h-14 w-full text-base"
-              onClick={() =>
-                trackEvent({
-                  eventName: "analyze_cta_click",
-                  metadata: {
-                    target: "/analyze",
-                    label: "上传座位图做海报",
-                  },
-                })
-              }
-            >
-              上传座位图做海报
-            </Link>
-            <Link
-              href="/generate"
-              className="button-secondary h-14 w-full text-base"
-              onClick={() =>
-                trackEvent({
-                  eventName: "generate_cta_click",
-                  metadata: {
-                    target: "/generate",
-                    label: "提示词生成图",
-                  },
-                })
-              }
-            >
-              提示词生成图
-            </Link>
-          </div>
-          <div className="tiny-disclaimer space-y-2">
-            <p>仅供娱乐和状态提醒，不构成任何结果承诺</p>
-            <div className="flex items-center justify-center gap-4 text-[12px] text-[rgba(101,112,105,0.78)]">
-              <Link href="/notice" className="underline decoration-[rgba(129,101,58,0.22)] underline-offset-4">
-                使用说明
-              </Link>
-              <Link href="/privacy" className="underline decoration-[rgba(129,101,58,0.22)] underline-offset-4">
-                隐私说明
-              </Link>
-            </div>
           </div>
         </div>
       </section>
-    </main>
+
+      <section className="paper-home-actions">
+        {homeCards.map((card) => (
+          <Link
+            key={card.href}
+            href={card.href}
+            className="paper-panel paper-home-action-card"
+            onClick={() =>
+              trackEvent({
+                eventName: card.eventName,
+                metadata: {
+                  target: card.href,
+                  label: card.title,
+                },
+              })
+            }
+          >
+            <div className="paper-home-action-icon">
+              <PaperIcon name={card.icon} />
+            </div>
+            <div className="paper-home-action-copy">
+              <h3>{card.title}</h3>
+              <p>{card.description}</p>
+            </div>
+            <span className="paper-chevron">›</span>
+          </Link>
+        ))}
+      </section>
+
+      <section className="paper-panel paper-home-process mt-6 px-5 py-6">
+        <div className="mb-5 flex items-center gap-3">
+          <span className="inline-block h-7 w-1 rounded-full bg-[rgba(185,147,82,0.9)]" />
+          <h2 className="paper-panel-title text-[34px]">今日流程</h2>
+        </div>
+        <div className="paper-process-grid">
+          {processItems.map((item) => (
+            <div key={item.number} className="paper-process-item">
+              <span className="paper-process-number">{item.number}</span>
+              <div className="paper-process-icon"><PaperIcon name={item.icon} /></div>
+              <div className="paper-panel-title text-[20px]">{item.title}</div>
+              <p className="paper-fine-text mt-1">{item.copy}</p>
+              {item.number < processItems.length ? <span className="paper-process-arrow">›</span> : null}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="paper-panel paper-home-tip mt-6">
+        <div className="paper-info-banner">
+          <div className="paper-info-banner-icon"><PaperIcon name="sun" /></div>
+          <div>
+            <div className="paper-panel-title text-[40px]">今日提示</div>
+            <p className="paper-description !mx-0 !mt-2 text-left">
+              本工具仅提供座位参考与状态提醒，不构成任何结果承诺。
+            </p>
+          </div>
+        </div>
+      </section>
+    </AppScaffold>
   );
 }

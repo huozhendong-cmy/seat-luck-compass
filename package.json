@@ -8,6 +8,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "@alicloud/dysmsapi20170525": "^4.5.1",
+    "@alicloud/openapi-client": "^0.4.15",
     "html-to-image": "^1.11.11",
     "next": "^16.0.0",
     "openai": "^6.39.0",

@@ -22,14 +22,11 @@ type PosterJobPayload = {
 type SubmissionListRow = {
   id: string;
   created_at: string;
-  zodiac: string;
-  mood: string;
-  recommended_seat: string;
-  total_score: number;
 };
 
 type PosterJobListRow = {
-  task_id: string;
+  id: string;
+  task_type?: string;
   created_at: string;
   updated_at: string;
   status: string;
@@ -43,6 +40,7 @@ type AnalyticsEventListRow = {
   path: string;
   visitor_id: string;
   session_id: string;
+  user_id?: string | null;
   referrer: string | null;
   metadata: Record<string, unknown> | null;
 };
@@ -180,6 +178,7 @@ export async function insertAnalyticsEvent(payload: AnalyticsEventPayload) {
       path: payload.path,
       visitor_id: payload.visitorId,
       session_id: payload.sessionId,
+      user_id: payload.userId ?? null,
       created_at_client: payload.createdAtClient ?? null,
       referrer: payload.referrer ?? null,
       user_agent: payload.userAgent ?? null,
@@ -212,6 +211,7 @@ function mapEventRow(row: AnalyticsEventListRow): AnalyticsEventRow {
     path: row.path,
     visitorId: row.visitor_id,
     sessionId: row.session_id,
+    userId: row.user_id ?? null,
     referrer: row.referrer,
     metadata: row.metadata,
   };
@@ -220,13 +220,13 @@ function mapEventRow(row: AnalyticsEventListRow): AnalyticsEventRow {
 export async function getAnalyticsDashboardData(): Promise<AnalyticsDashboardData> {
   const [events, submissions, posterJobs] = await Promise.all([
     postgrestSelect<AnalyticsEventListRow>(
-      "analytics_events?select=id,created_at,event_name,path,visitor_id,session_id,referrer,metadata&order=created_at.desc&limit=4000",
+      "analytics_events?select=id,created_at,event_name,path,visitor_id,session_id,user_id,referrer,metadata&order=created_at.desc&limit=4000",
     ),
     postgrestSelect<SubmissionListRow>(
-      "submissions?select=id,created_at,zodiac,mood,recommended_seat,total_score&order=created_at.desc&limit=1000",
+      "seat_records?select=id,created_at&order=created_at.desc&limit=1000",
     ),
     postgrestSelect<PosterJobListRow>(
-      "poster_jobs?select=task_id,created_at,updated_at,status,error_message&order=created_at.desc&limit=1000",
+      "image_tasks?select=id,task_type,created_at,updated_at,status,error_message&order=created_at.desc&limit=1000",
     ),
   ]);
 
@@ -238,8 +238,9 @@ export async function getAnalyticsDashboardData(): Promise<AnalyticsDashboardDat
   const uniqueSessions = new Set(
     mappedEvents.map((event) => event.sessionId).filter(Boolean),
   ).size;
-  const posterSuccessCount = posterJobs.filter((job) => job.status === "success").length;
-  const posterFailCount = posterJobs.filter((job) => job.status === "fail").length;
+  const posterOnlyJobs = posterJobs.filter((job) => job.task_type === "poster");
+  const posterSuccessCount = posterOnlyJobs.filter((job) => job.status === "success").length;
+  const posterFailCount = posterOnlyJobs.filter((job) => job.status === "failed").length;
   const posterSuccessRate = percentage(
     posterSuccessCount,
     posterSuccessCount + posterFailCount,
@@ -308,7 +309,7 @@ export async function getAnalyticsDashboardData(): Promise<AnalyticsDashboardDat
     uniqueVisitors,
     uniqueSessions,
     completedResults: submissions.length,
-    posterJobs: posterJobs.length,
+    posterJobs: posterOnlyJobs.length,
     posterSuccessCount,
     posterFailCount,
     posterSuccessRate,

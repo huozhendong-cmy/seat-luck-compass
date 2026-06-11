@@ -1,4 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/server/auth";
+import {
+  PROMPT_IMAGE_COST,
+  consumeCredits,
+  createImageTask,
+  markImageTaskRefunded,
+  refundCredits,
+  updateImageTaskById,
+} from "@/lib/server/user-store";
 
 export const runtime = "nodejs";
 
@@ -42,7 +51,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "请输入图片提示词。" }, { status: 400 });
   }
 
+  let authUserId = "";
+  let localTaskId = "";
+  let creditsConsumed = false;
+
   try {
+    const auth = await requireAuth();
+    authUserId = auth.user.id;
+
+    const localTask = await createImageTask({
+      userId: auth.user.id,
+      taskType: "prompt_image",
+      status: "pending",
+      creditsCost: PROMPT_IMAGE_COST,
+      inputPayload: {
+        prompt,
+        size,
+        isEnhance,
+      },
+    });
+    localTaskId = localTask.id;
+
+    await consumeCredits(auth.user.id, PROMPT_IMAGE_COST, "prompt_image_generation", localTaskId);
+    creditsConsumed = true;
+    await updateImageTaskById(localTaskId, { status: "processing" });
+
     const response = await fetch(`${baseUrl}/api/v1/gpt4o-image/generate`, {
       method: "POST",
       headers: {
@@ -64,14 +97,32 @@ export async function POST(request: Request) {
     const taskId = data.data?.taskId;
 
     if (!response.ok || data.code !== 200 || !taskId) {
-      return NextResponse.json(
-        { error: data.msg || "Kie 图片任务创建失败。" },
-        { status: 500 },
-      );
+      throw new Error(data.msg || "Kie 图片任务创建失败。");
     }
+
+    await updateImageTaskById(localTaskId, {
+      status: "processing",
+      externalTaskId: taskId,
+    });
 
     return NextResponse.json({ taskId });
   } catch (error) {
+    if (localTaskId) {
+      await updateImageTaskById(localTaskId, {
+        status: "failed",
+        errorMessage: error instanceof Error ? error.message : "Kie 图片任务创建失败。",
+      }).catch(() => null);
+    }
+
+    if (creditsConsumed && authUserId && localTaskId) {
+      await refundCredits(authUserId, PROMPT_IMAGE_COST, "prompt_image_generation_refund", localTaskId).catch(() => null);
+      await markImageTaskRefunded(localTaskId).catch(() => null);
+    }
+
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "请先登录后再继续。" }, { status: 401 });
+    }
+
     const message =
       error instanceof Error ? error.message : "Kie 图片任务创建失败。";
 

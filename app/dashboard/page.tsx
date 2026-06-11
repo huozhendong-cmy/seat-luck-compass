@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdminCreditGrantPanel } from "@/components/AdminCreditGrantPanel";
 import { SectionHeading } from "@/components/SectionHeading";
 import { getAnalyticsDashboardData, isSupabaseConfigured } from "@/lib/supabase-records";
 
@@ -46,7 +47,47 @@ function shortPath(path: string) {
   return path === "/" ? "首页" : path;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = searchParams ? await searchParams : undefined;
+  const providedKey = typeof params?.key === "string" ? params.key.trim() : "";
+  const adminKey = (process.env.ADMIN_DASHBOARD_KEY || "").trim();
+  const refreshHref = providedKey ? `/dashboard?key=${encodeURIComponent(providedKey)}` : "/dashboard";
+
+  if (!adminKey || providedKey !== adminKey) {
+    return (
+      <main className="page-wrap space-y-6">
+        <div className="topbar fade-up">
+          <div className="brand-mark">
+            <div className="brand-seal" />
+            <div className="brand-meta">
+              <strong>Dashboard</strong>
+              <span>后台入口</span>
+            </div>
+          </div>
+        </div>
+
+        <SectionHeading
+          eyebrow="Admin"
+          title="后台入口已锁定"
+          description="这个页面现在改成了你的手动运营后台，需要带后台密钥访问。"
+        />
+
+        <section className="glass-panel rounded-[32px] px-5 py-5">
+          <p className="text-sm leading-7 text-[var(--muted)]">
+            请用这样的方式打开：
+            <span className="mt-2 block rounded-[16px] bg-[rgba(255,255,255,0.68)] px-4 py-3 text-[13px] leading-6 text-[var(--text)]">
+              /dashboard?key=你的后台密钥
+            </span>
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   const configured = isSupabaseConfigured();
 
   if (!configured) {
@@ -67,6 +108,8 @@ export default async function DashboardPage() {
           title="统计后台还没接上"
           description="当前环境里还没有可用的 Supabase 配置，所以页面暂时读不到访问和转化数据。"
         />
+
+        <AdminCreditGrantPanel adminKey={adminKey} />
 
         <section className="glass-panel rounded-[32px] px-5 py-5">
           <p className="text-sm leading-7 text-[var(--muted)]">
@@ -104,6 +147,8 @@ export default async function DashboardPage() {
           title="统计表还没完全就绪"
           description="页面已经接好了，但 Supabase 那边还需要更新一次新表结构，统计页才会开始正常出数。"
         />
+
+        <AdminCreditGrantPanel adminKey={adminKey} />
 
         <section className="glass-panel rounded-[32px] px-5 py-5">
           <p className="text-sm leading-7 text-[var(--muted)]">
@@ -158,7 +203,7 @@ export default async function DashboardPage() {
             <span>后台统计页 · 刷新即可看到最新数据</span>
           </div>
         </div>
-        <Link href="/dashboard" className="button-secondary h-11 px-4 text-sm">
+        <Link href={refreshHref} className="button-secondary h-11 px-4 text-sm">
           刷新数据
         </Link>
       </div>
@@ -168,6 +213,8 @@ export default async function DashboardPage() {
         title="使用数据一眼看清"
         description="这一页会把访问、提交和海报转化整理成可读视图。你以后主要看这里，不用再直接翻 Supabase 原始表。"
       />
+
+      <AdminCreditGrantPanel adminKey={adminKey} />
 
       <section className="grid grid-cols-2 gap-3">
         {summaryCards.map((item) => (

@@ -1,4 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/server/auth";
+import {
+  POSTER_GENERATION_COST,
+  consumeCredits,
+  createImageTask,
+  markImageTaskRefunded,
+  refundCredits,
+  updateImageTaskById,
+} from "@/lib/server/user-store";
 import { upsertPosterJobRecord } from "@/lib/supabase-records";
 import type {
   EnvironmentDraft,
@@ -145,7 +154,34 @@ export async function POST(request: Request) {
     );
   }
 
+  let authUserId = "";
+  let localTaskId = "";
+  let creditsConsumed = false;
+
   try {
+    const auth = await requireAuth();
+    authUserId = auth.user.id;
+
+    const localTask = await createImageTask({
+      userId: auth.user.id,
+      taskType: "poster",
+      status: "pending",
+      creditsCost: POSTER_GENERATION_COST,
+      sourceFileName: `seat-reference-${Date.now()}.png`,
+      inputPayload: {
+        profile,
+        environment,
+        markup,
+      },
+    });
+    localTaskId = localTask.id;
+
+    await consumeCredits(auth.user.id, POSTER_GENERATION_COST, "poster_generation", localTaskId);
+    creditsConsumed = true;
+    await updateImageTaskById(localTaskId, {
+      status: "processing",
+    });
+
     const uploadResponse = await fetchWithTimeout(`${uploadBaseUrl}/api/file-base64-upload`, {
       method: "POST",
       headers: {
@@ -164,10 +200,7 @@ export async function POST(request: Request) {
     const imageUrl = uploadData.data?.fileUrl || uploadData.data?.downloadUrl;
 
     if (!uploadResponse.ok || !uploadData.success || !imageUrl) {
-      return NextResponse.json(
-        { error: uploadData.msg || "上传参考图片到 Kie 失败。" },
-        { status: 500 },
-      );
+      throw new Error(uploadData.msg || "上传参考图片到 Kie 失败。");
     }
 
     const createTaskResponse = await fetchWithTimeout(`${kieBaseUrl}/api/v1/jobs/createTask`, {
@@ -191,11 +224,14 @@ export async function POST(request: Request) {
     const taskId = taskData.data?.taskId;
 
     if (!createTaskResponse.ok || !taskId) {
-      return NextResponse.json(
-        { error: taskData.msg || "Kie 海报任务创建失败。" },
-        { status: 500 },
-      );
+      throw new Error(taskData.msg || "Kie 海报任务创建失败。");
     }
+
+    await updateImageTaskById(localTaskId, {
+      status: "processing",
+      externalTaskId: taskId,
+      sourceImageUrl: imageUrl,
+    });
 
     try {
       await upsertPosterJobRecord({
@@ -212,6 +248,22 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ taskId });
   } catch (error) {
+    if (localTaskId) {
+      await updateImageTaskById(localTaskId, {
+        status: "failed",
+        errorMessage: error instanceof Error ? error.message : "Kie 海报任务创建失败。",
+      }).catch(() => null);
+    }
+
+    if (creditsConsumed && authUserId && localTaskId) {
+      await refundCredits(authUserId, POSTER_GENERATION_COST, "poster_generation_refund", localTaskId).catch(() => null);
+      await markImageTaskRefunded(localTaskId).catch(() => null);
+    }
+
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "请先登录后再继续。" }, { status: 401 });
+    }
+
     if (error instanceof Error && error.name === "AbortError") {
       return NextResponse.json(
         { error: "图片服务响应较慢，请稍后重试，或先使用文字建议卡。" },

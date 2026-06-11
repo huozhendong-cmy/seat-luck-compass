@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { WeChatCreditModal, isCreditsDepletedMessage } from "@/components/WeChatCreditModal";
 import { SectionHeading } from "@/components/SectionHeading";
-import type { KieImageResult } from "@/lib/types";
+import type { KieImageResult, UserOverviewResponse } from "@/lib/types";
 
 const sizeOptions = ["1:1", "3:4", "4:3", "9:16", "16:9"] as const;
 
 export default function GeneratePage() {
+  const router = useRouter();
   const [prompt, setPrompt] = useState(
     "一张高级感的中式会客区座位海报，深色背景，金色细节，安静、稳重、舒展的空间氛围",
   );
@@ -17,6 +20,43 @@ export default function GeneratePage() {
   const [result, setResult] = useState<KieImageResult | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
+  const [userId, setUserId] = useState("");
+  const [showCreditModal, setShowCreditModal] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadOverview() {
+      try {
+        const response = await fetch("/api/user/overview", { cache: "no-store" });
+        const data = (await response.json()) as UserOverviewResponse | { error?: string };
+
+        if (response.status === 401) {
+          throw new Error("游客身份初始化失败，请刷新后重试。");
+        }
+
+        if (!response.ok || !("authenticated" in data)) {
+          throw new Error("error" in data ? data.error || "读取用户信息失败。" : "读取用户信息失败。");
+        }
+
+        if (active) {
+          setCreditsBalance(data.credits?.balance ?? 0);
+          setUserId(data.user?.id ?? "");
+        }
+      } catch (requestError) {
+        if (active) {
+          setError(requestError instanceof Error ? requestError.message : "读取用户信息失败。");
+        }
+      }
+    }
+
+    void loadOverview();
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   useEffect(() => {
     if (!taskId) {
@@ -32,6 +72,10 @@ export default function GeneratePage() {
         });
         const data = (await response.json()) as KieImageResult | { error: string };
 
+        if (response.status === 401) {
+          throw new Error("游客身份初始化失败，请刷新后重试。");
+        }
+
         if (!response.ok || "error" in data) {
           throw new Error("error" in data ? data.error : "查询任务状态失败。");
         }
@@ -43,6 +87,15 @@ export default function GeneratePage() {
         setResult(data);
 
         if (data.status === "SUCCESS" || data.status === "GENERATE_FAILED" || data.status === "CREATE_TASK_FAILED" || data.status === "FAILED") {
+          try {
+            const sessionResponse = await fetch("/api/user/overview", { cache: "no-store" });
+            const sessionData = (await sessionResponse.json()) as UserOverviewResponse | { error?: string };
+            if (sessionResponse.ok && "authenticated" in sessionData && active) {
+              setCreditsBalance(sessionData.credits?.balance ?? null);
+            }
+          } catch {
+            // ignore
+          }
           setLoading(false);
           return;
         }
@@ -92,15 +145,21 @@ export default function GeneratePage() {
 
       const data = (await response.json()) as { taskId?: string; error?: string };
 
+      if (response.status === 401) {
+        throw new Error("游客身份初始化失败，请刷新后重试。");
+      }
+
       if (!response.ok || !data.taskId) {
         throw new Error(data.error || "创建图片任务失败。");
       }
 
       setTaskId(data.taskId);
     } catch (requestError) {
-      setError(
-        requestError instanceof Error ? requestError.message : "创建图片任务失败。",
-      );
+      const nextMessage = requestError instanceof Error ? requestError.message : "创建图片任务失败。";
+      setError(nextMessage);
+      if (isCreditsDepletedMessage(nextMessage)) {
+        setShowCreditModal(true);
+      }
       setLoading(false);
     }
   }
@@ -112,6 +171,7 @@ export default function GeneratePage() {
 
   return (
     <main className="page-wrap space-y-6">
+      <WeChatCreditModal open={showCreditModal} onClose={() => setShowCreditModal(false)} userId={userId} />
       <div className="topbar fade-up">
         <div className="brand-mark">
           <div className="brand-seal" />
@@ -133,6 +193,10 @@ export default function GeneratePage() {
           <div className="info-chip">
             <strong>适合什么</strong>
             <span>适合生成座位海报、空间氛围图、会客区示意图、风格参考图。当前这版先做提示词生成，后续再接参考图编辑。</span>
+          </div>
+          <div className="info-chip">
+            <strong>当前额度</strong>
+            <span>剩余 {creditsBalance ?? "--"} 点，提示词生图当前免费，只有生成海报会消耗 10 点。</span>
           </div>
         </div>
 

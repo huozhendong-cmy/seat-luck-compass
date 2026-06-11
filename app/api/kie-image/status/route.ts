@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/server/auth";
+import {
+  getImageTaskByExternalTaskId,
+  markImageTaskRefunded,
+  refundCredits,
+  updateImageTaskByExternalTaskId,
+} from "@/lib/server/user-store";
 import type { KieImageResult, KieImageTaskStatus } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -36,6 +43,13 @@ export async function GET(request: Request) {
   }
 
   try {
+    const auth = await requireAuth();
+    const existingTask = await getImageTaskByExternalTaskId(auth.user.id, taskId);
+
+    if (!existingTask) {
+      return NextResponse.json({ error: "任务不存在或无权访问。" }, { status: 404 });
+    }
+
     const response = await fetch(
       `${baseUrl}/api/v1/gpt4o-image/record-info?taskId=${encodeURIComponent(taskId)}`,
       {
@@ -75,8 +89,37 @@ export async function GET(request: Request) {
       errorMessage: data.data.errorMessage || undefined,
     };
 
+    const failed =
+      result.status === "GENERATE_FAILED" ||
+      result.status === "CREATE_TASK_FAILED" ||
+      result.status === "FAILED";
+
+    await updateImageTaskByExternalTaskId(auth.user.id, taskId, {
+      status: result.status === "SUCCESS" ? "success" : failed ? "failed" : "processing",
+      outputPayload: {
+        progress: result.progress ?? null,
+        prompt,
+      },
+      resultImageUrls: result.imageUrls,
+      errorMessage: result.errorMessage ?? null,
+    });
+
+    if (failed && !existingTask.raw.credits_refunded_at && existingTask.raw.credits_cost > 0) {
+      await refundCredits(
+        auth.user.id,
+        existingTask.raw.credits_cost,
+        "prompt_image_generation_refund",
+        existingTask.raw.id,
+      ).catch(() => null);
+      await markImageTaskRefunded(existingTask.raw.id).catch(() => null);
+    }
+
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "请先登录后再继续。" }, { status: 401 });
+    }
+
     const message =
       error instanceof Error ? error.message : "Kie 图片状态查询失败。";
 

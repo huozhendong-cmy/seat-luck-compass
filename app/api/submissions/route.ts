@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { isSupabaseConfigured, upsertSubmissionRecord } from "@/lib/supabase-records";
+import { requireAuth } from "@/lib/server/auth";
+import { createSeatRecord } from "@/lib/server/user-store";
 import type { ResultData } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -21,16 +22,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "缺少结果数据。" }, { status: 400 });
   }
 
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json({ ok: true, skipped: true });
-  }
-
   try {
-    await upsertSubmissionRecord(body.result);
-    return NextResponse.json({ ok: true });
+    const auth = await requireAuth();
+    const record = await createSeatRecord(auth.user.id, body.result);
+    return NextResponse.json({ ok: true, record });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "提交记录写入 Supabase 失败。";
-    return NextResponse.json({ error: message }, { status: 500 });
+      error instanceof Error ? error.message : "提交记录写入失败。";
+    return NextResponse.json(
+      { error: message },
+      { status: message === "UNAUTHORIZED" ? 401 : 500 },
+    );
   }
 }

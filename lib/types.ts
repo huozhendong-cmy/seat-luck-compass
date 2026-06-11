@@ -159,6 +159,7 @@ export type AnalyticsEventPayload = {
   path: string;
   visitorId: string;
   sessionId: string;
+  userId?: string | null;
   createdAtClient?: string;
   referrer?: string | null;
   userAgent?: string | null;
@@ -172,6 +173,7 @@ export type AnalyticsEventRow = {
   path: string;
   visitorId: string;
   sessionId: string;
+  userId?: string | null;
   referrer: string | null;
   metadata: Record<string, unknown> | null;
 };
@@ -200,4 +202,74 @@ export type AnalyticsDashboardData = {
     results: number;
   }>;
   recentActivity: AnalyticsEventRow[];
+};
+
+export type TaskStatus = "pending" | "processing" | "success" | "failed";
+
+export type ImageTaskType = "analysis" | "poster" | "prompt_image";
+
+export type PhoneLoginRequest = {
+  phone: string;
+};
+
+export type PhoneVerifyRequest = {
+  phone: string;
+  code: string;
+};
+
+export type UserRecordDraftPayload = {
+  profileDraft?: ProfileDraft | null;
+  environmentDraft?: EnvironmentDraft | null;
+};
+
+export type AppUser = {
+  id: string;
+  phone: string;
+  phoneMasked: string;
+  nickname: string;
+  avatarUrl: string | null;
+  isGuest: boolean;
+};
+
+export type UserCreditSummary = {
+  balance: number;
+  totalGranted: number;
+  totalUsed: number;
+  totalRefunded: number;
+};
+
+export type AuthSessionResponse = {
+  authenticated: boolean;
+  user: AppUser | null;
+  credits: UserCreditSummary | null;
+};
+
+export type UserOverviewResponse = AuthSessionResponse & {
+  profileDraft: ProfileDraft | null;
+  environmentDraft: EnvironmentDraft | null;
+  recentRecords: SeatRecordSummary[];
+  recentImageTasks: ImageTaskSummary[];
+};
+
+export type SeatRecordSummary = {
+  id: string;
+  createdAt: string;
+  result: ResultData;
+};
+
+export type ImageTaskSummary = {
+  id: string;
+  taskType: ImageTaskType;
+  status: TaskStatus;
+  creditsCost: number;
+  createdAt: string;
+  updatedAt: string;
+  externalTaskId: string | null;
+  resultImageUrls: string[];
+  errorMessage: string | null;
+};
+
+export type UserRecordsResponse = {
+  seatRecords: SeatRecordSummary[];
+  imageTasks: ImageTaskSummary[];
 };

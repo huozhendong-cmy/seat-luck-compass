@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/server/auth";
+import {
+  getImageTaskByExternalTaskId,
+  markImageTaskRefunded,
+  refundCredits,
+  updateImageTaskByExternalTaskId,
+} from "@/lib/server/user-store";
 import { upsertPosterJobRecord } from "@/lib/supabase-records";
 import type { KiePosterResult } from "@/lib/types";
 
@@ -134,6 +141,13 @@ export async function GET(request: Request) {
   }
 
   try {
+    const auth = await requireAuth();
+    const existingTask = await getImageTaskByExternalTaskId(auth.user.id, taskId);
+
+    if (!existingTask) {
+      return NextResponse.json({ error: "任务不存在或无权访问。" }, { status: 404 });
+    }
+
     const response = await fetch(
       `${kieBaseUrl}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
       {
@@ -190,8 +204,33 @@ export async function GET(request: Request) {
       console.error("poster status sync failed", recordError);
     }
 
+    await updateImageTaskByExternalTaskId(auth.user.id, taskId, {
+      status: result.state === "success" ? "success" : result.state === "fail" ? "failed" : "processing",
+      outputPayload: data.data.response ? { response: data.data.response } : undefined,
+      resultImageUrls: result.imageUrls,
+      errorMessage: result.failMsg ?? null,
+    });
+
+    if (
+      result.state === "fail" &&
+      !existingTask.raw.credits_refunded_at &&
+      existingTask.raw.credits_cost > 0
+    ) {
+      await refundCredits(
+        auth.user.id,
+        existingTask.raw.credits_cost,
+        "poster_generation_refund",
+        existingTask.raw.id,
+      ).catch(() => null);
+      await markImageTaskRefunded(existingTask.raw.id).catch(() => null);
+    }
+
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "请先登录后再继续。" }, { status: 401 });
+    }
+
     const message =
       error instanceof Error ? error.message : "Kie 海报任务状态查询失败。";
 

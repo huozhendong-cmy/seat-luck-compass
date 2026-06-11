@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAuthContext } from "@/lib/server/auth";
 import { insertAnalyticsEvent, isSupabaseConfigured } from "@/lib/supabase-records";
 import type { AnalyticsEventPayload } from "@/lib/types";
 
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
   }
 
   try {
+    const auth = await getAuthContext();
+    body.userId = auth?.user.id ?? null;
     await insertAnalyticsEvent(body);
     return NextResponse.json({ ok: true });
   } catch (error) {
