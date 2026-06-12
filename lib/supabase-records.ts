@@ -46,11 +46,13 @@ type AnalyticsEventListRow = {
 };
 
 function getSupabaseUrl() {
-  return (
+  const raw = (
     process.env.SUPABASE_URL ??
     process.env.NEXT_PUBLIC_SUPABASE_URL ??
     ""
   ).trim();
+
+  return raw.replace(/\/rest\/v1\/?$/i, "").replace(/\/+$/g, "");
 }
 
 function getSupabaseApiKey() {
