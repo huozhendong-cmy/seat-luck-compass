@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/server/auth";
+import { appendGuestCookie, ensureAuthContext } from "@/lib/server/auth";
 import {
   PROMPT_IMAGE_COST,
   consumeCredits,
@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 
 type CreateBody = {
   prompt?: string;
-  size?: "1:1" | "3:4" | "4:3" | "9:16" | "16:9";
+  size?: "1:1" | "3:2" | "2:3" | "3:4" | "4:3" | "9:16" | "16:9";
   isEnhance?: boolean;
 };
 
@@ -26,6 +26,22 @@ type KieCreateResponse = {
 };
 
 const baseUrl = process.env.KIE_API_BASE_URL ?? "https://api.kie.ai";
+
+function normalizeImageSize(size?: CreateBody["size"]) {
+  switch (size) {
+    case "4:3":
+    case "16:9":
+    case "3:2":
+      return "3:2";
+    case "3:4":
+    case "9:16":
+    case "2:3":
+      return "2:3";
+    case "1:1":
+    default:
+      return "1:1";
+  }
+}
 
 export async function POST(request: Request) {
   if (!process.env.KIE_API_KEY) {
@@ -44,7 +60,7 @@ export async function POST(request: Request) {
   }
 
   const prompt = body.prompt?.trim();
-  const size = body.size ?? "1:1";
+  const size = normalizeImageSize(body.size);
   const isEnhance = body.isEnhance ?? false;
 
   if (!prompt) {
@@ -54,9 +70,12 @@ export async function POST(request: Request) {
   let authUserId = "";
   let localTaskId = "";
   let creditsConsumed = false;
+  let guestTokenToSet: string | null = null;
 
   try {
-    const auth = await requireAuth();
+    const ensured = await ensureAuthContext();
+    const auth = ensured.auth;
+    guestTokenToSet = ensured.guestTokenToSet;
     authUserId = auth.user.id;
 
     const localTask = await createImageTask({
@@ -105,7 +124,8 @@ export async function POST(request: Request) {
       externalTaskId: taskId,
     });
 
-    return NextResponse.json({ taskId });
+    const result = NextResponse.json({ taskId });
+    return appendGuestCookie(result, guestTokenToSet);
   } catch (error) {
     if (localTaskId) {
       await updateImageTaskById(localTaskId, {
@@ -119,13 +139,10 @@ export async function POST(request: Request) {
       await markImageTaskRefunded(localTaskId).catch(() => null);
     }
 
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "请先登录后再继续。" }, { status: 401 });
-    }
-
     const message =
       error instanceof Error ? error.message : "Kie 图片任务创建失败。";
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    const response = NextResponse.json({ error: message }, { status: 500 });
+    return appendGuestCookie(response, guestTokenToSet);
   }
 }

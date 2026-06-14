@@ -7,7 +7,7 @@ import { WeChatCreditModal, isCreditsDepletedMessage } from "@/components/WeChat
 import { SectionHeading } from "@/components/SectionHeading";
 import type { KieImageResult, UserOverviewResponse } from "@/lib/types";
 
-const sizeOptions = ["1:1", "3:4", "4:3", "9:16", "16:9"] as const;
+const sizeOptions = ["1:1", "3:2", "2:3"] as const;
 
 export default function GeneratePage() {
   const router = useRouter();
@@ -214,7 +214,7 @@ export default function GeneratePage() {
 
           <div className="field-shell">
             <div className="field-label">画幅比例</div>
-            <div className="field-caption">竖版更适合 H5 分享图，方图更适合封面和卡片。</div>
+            <div className="field-caption">目前按 Kie 官方支持的三种比例输出：方图、横图、竖图。</div>
             <div className="segment-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
               {sizeOptions.map((option) => (
                 <button

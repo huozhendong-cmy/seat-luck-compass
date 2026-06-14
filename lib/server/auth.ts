@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import type { AppUser, AuthSessionResponse, UserCreditSummary } from "@/lib/types";
 import { insertRows, patchRows, selectSingle } from "@/lib/server/supabase-admin";
@@ -55,8 +55,23 @@ export type AuthContext = {
   sessionId: string;
 };
 
+export type EnsuredAuthContext = {
+  auth: AuthContext;
+  guestTokenToSet: string | null;
+};
+
 function hashValue(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function isUniqueViolation(error: unknown, constraint?: string) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+
+  if (!message.includes('"code":"23505"')) {
+    return false;
+  }
+
+  return constraint ? message.includes(constraint) : true;
 }
 
 function nowIso() {
@@ -113,16 +128,32 @@ async function ensureProfile(user: UserRow, nicknameOverride?: string) {
     return existing;
   }
 
-  const [created] = await insertRows<UserProfileRow>(
-    "user_profiles",
-    {
-      user_id: user.id,
-      nickname: nicknameOverride || buildNickname(user.phone),
-      avatar_url: null,
-    },
-  );
+  try {
+    const [created] = await insertRows<UserProfileRow>(
+      "user_profiles",
+      {
+        user_id: user.id,
+        nickname: nicknameOverride || buildNickname(user.phone),
+        avatar_url: null,
+      },
+    );
 
-  return created;
+    return created;
+  } catch (error) {
+    if (!isUniqueViolation(error)) {
+      throw error;
+    }
+
+    const createdByAnotherRequest = await selectSingle<UserProfileRow>(
+      `user_profiles?select=user_id,nickname,avatar_url&user_id=eq.${user.id}`,
+    );
+
+    if (createdByAnotherRequest) {
+      return createdByAnotherRequest;
+    }
+
+    throw error;
+  }
 }
 
 async function ensureCredits(userId: string) {
@@ -134,18 +165,34 @@ async function ensureCredits(userId: string) {
     return existing;
   }
 
-  const [created] = await insertRows<UserCreditsRow>(
-    "user_credits",
-    {
-      user_id: userId,
-      balance: INITIAL_FREE_CREDITS,
-      total_granted: INITIAL_FREE_CREDITS,
-      total_used: 0,
-      total_refunded: 0,
-    },
-  );
+  try {
+    const [created] = await insertRows<UserCreditsRow>(
+      "user_credits",
+      {
+        user_id: userId,
+        balance: INITIAL_FREE_CREDITS,
+        total_granted: INITIAL_FREE_CREDITS,
+        total_used: 0,
+        total_refunded: 0,
+      },
+    );
 
-  return created;
+    return created;
+  } catch (error) {
+    if (!isUniqueViolation(error)) {
+      throw error;
+    }
+
+    const createdByAnotherRequest = await selectSingle<UserCreditsRow>(
+      `user_credits?select=user_id,balance,total_granted,total_used,total_refunded&user_id=eq.${userId}`,
+    );
+
+    if (createdByAnotherRequest) {
+      return createdByAnotherRequest;
+    }
+
+    throw error;
+  }
 }
 
 async function ensureUser(phone: string) {
@@ -153,15 +200,31 @@ async function ensureUser(phone: string) {
     `users?select=id,phone,status&phone=eq.${encodeURIComponent(phone)}`,
   );
 
-  const user =
-    existing ??
-    (
-      await insertRows<UserRow>("users", {
-        phone,
-        phone_verified_at: nowIso(),
-        status: "active",
-      })
-    )[0];
+  let user = existing;
+
+  if (!user) {
+    try {
+      user = (
+        await insertRows<UserRow>("users", {
+          phone,
+          phone_verified_at: nowIso(),
+          status: "active",
+        })
+      )[0];
+    } catch (error) {
+      if (!isUniqueViolation(error, "users_phone_key")) {
+        throw error;
+      }
+
+      user = await selectSingle<UserRow>(
+        `users?select=id,phone,status&phone=eq.${encodeURIComponent(phone)}`,
+      );
+
+      if (!user) {
+        throw error;
+      }
+    }
+  }
 
   const [profile, credits] = await Promise.all([ensureProfile(user), ensureCredits(user.id)]);
 
@@ -174,14 +237,30 @@ async function ensureGuestUser(guestToken: string) {
     `users?select=id,phone,status&phone=eq.${encodeURIComponent(phone)}`,
   );
 
-  const user =
-    existing ??
-    (
-      await insertRows<UserRow>("users", {
-        phone,
-        status: "active",
-      })
-    )[0];
+  let user = existing;
+
+  if (!user) {
+    try {
+      user = (
+        await insertRows<UserRow>("users", {
+          phone,
+          status: "active",
+        })
+      )[0];
+    } catch (error) {
+      if (!isUniqueViolation(error, "users_phone_key")) {
+        throw error;
+      }
+
+      user = await selectSingle<UserRow>(
+        `users?select=id,phone,status&phone=eq.${encodeURIComponent(phone)}`,
+      );
+
+      if (!user) {
+        throw error;
+      }
+    }
+  }
 
   const [profile, credits] = await Promise.all([
     ensureProfile(user, buildGuestNickname(guestToken)),
@@ -284,6 +363,44 @@ export async function requireAuth() {
   }
 
   return auth;
+}
+
+export async function ensureAuthContext(): Promise<EnsuredAuthContext> {
+  const auth = await getAuthContext();
+
+  if (auth) {
+    return {
+      auth,
+      guestTokenToSet: null,
+    };
+  }
+
+  const guestToken = randomUUID();
+  const guestAuth = await loadGuestAuthContext(guestToken);
+
+  if (!guestAuth) {
+    throw new Error("游客身份初始化失败。");
+  }
+
+  return {
+    auth: guestAuth,
+    guestTokenToSet: guestToken,
+  };
+}
+
+export function appendGuestCookie(response: Response, guestToken: string | null) {
+  if (!guestToken) {
+    return response;
+  }
+
+  response.headers.append(
+    "Set-Cookie",
+    `${GUEST_COOKIE_NAME}=${guestToken}; Path=/; HttpOnly; Max-Age=${GUEST_TTL_SECONDS}; SameSite=Lax${
+      process.env.NODE_ENV === "production" ? "; Secure" : ""
+    }`,
+  );
+
+  return response;
 }
 
 function generateLoginCode() {

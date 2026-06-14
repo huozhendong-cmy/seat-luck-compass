@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/server/auth";
+import { appendGuestCookie, ensureAuthContext } from "@/lib/server/auth";
 import {
   getImageTaskByExternalTaskId,
   markImageTaskRefunded,
@@ -18,14 +18,32 @@ type KieStatusResponse = {
     paramJson?: string;
     response?: {
       resultUrls?: string[];
+      result_urls?: string[];
     };
     status?: KieImageTaskStatus;
+    successFlag?: number;
     progress?: string;
     errorMessage?: string;
   };
 };
 
 const baseUrl = process.env.KIE_API_BASE_URL ?? "https://api.kie.ai";
+
+function mapKieImageStatus(data?: KieStatusResponse["data"]): KieImageTaskStatus {
+  if (data?.status) {
+    return data.status;
+  }
+
+  if (data?.successFlag === 1) {
+    return "SUCCESS";
+  }
+
+  if (data?.successFlag === 2) {
+    return "GENERATE_FAILED";
+  }
+
+  return "GENERATING";
+}
 
 export async function GET(request: Request) {
   if (!process.env.KIE_API_KEY) {
@@ -43,14 +61,15 @@ export async function GET(request: Request) {
   }
 
   try {
-    const auth = await requireAuth();
+    const { auth, guestTokenToSet } = await ensureAuthContext();
     const existingTask = await getImageTaskByExternalTaskId(auth.user.id, taskId);
 
     if (!existingTask) {
-      return NextResponse.json({ error: "任务不存在或无权访问。" }, { status: 404 });
+      const response = NextResponse.json({ error: "任务不存在或无权访问。" }, { status: 404 });
+      return appendGuestCookie(response, guestTokenToSet);
     }
 
-    const response = await fetch(
+    const kieResponse = await fetch(
       `${baseUrl}/api/v1/gpt4o-image/record-info?taskId=${encodeURIComponent(taskId)}`,
       {
         headers: {
@@ -60,13 +79,14 @@ export async function GET(request: Request) {
       },
     );
 
-    const data = (await response.json()) as KieStatusResponse;
+    const data = (await kieResponse.json()) as KieStatusResponse;
 
-    if (!response.ok || data.code !== 200 || !data.data?.taskId) {
-      return NextResponse.json(
+    if (!kieResponse.ok || data.code !== 200 || !data.data?.taskId) {
+      const errorResponse = NextResponse.json(
         { error: data.msg || "Kie 图片状态查询失败。" },
         { status: 500 },
       );
+      return appendGuestCookie(errorResponse, guestTokenToSet);
     }
 
     let prompt = "";
@@ -82,10 +102,10 @@ export async function GET(request: Request) {
 
     const result: KieImageResult = {
       taskId: data.data.taskId,
-      status: data.data.status ?? "GENERATING",
+      status: mapKieImageStatus(data.data),
       progress: data.data.progress,
       prompt,
-      imageUrls: data.data.response?.resultUrls ?? [],
+      imageUrls: data.data.response?.resultUrls ?? data.data.response?.result_urls ?? [],
       errorMessage: data.data.errorMessage || undefined,
     };
 
@@ -114,12 +134,9 @@ export async function GET(request: Request) {
       await markImageTaskRefunded(existingTask.raw.id).catch(() => null);
     }
 
-    return NextResponse.json(result);
+    const response = NextResponse.json(result);
+    return appendGuestCookie(response, guestTokenToSet);
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "请先登录后再继续。" }, { status: 401 });
-    }
-
     const message =
       error instanceof Error ? error.message : "Kie 图片状态查询失败。";
 

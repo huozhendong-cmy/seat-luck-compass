@@ -393,30 +393,74 @@ export async function updateImageTaskByExternalTaskId(
   externalTaskId: string,
   patch: ImageTaskPatchInput,
 ) {
+  const payload: Record<string, unknown> = {
+    updated_at: nowIso(),
+  };
+
+  if (patch.status !== undefined) {
+    payload.status = patch.status;
+  }
+
+  if (patch.outputPayload !== undefined) {
+    payload.output_payload = patch.outputPayload;
+  }
+
+  if (patch.resultImageUrls !== undefined) {
+    payload.result_image_urls = patch.resultImageUrls;
+  }
+
+  if (patch.errorMessage !== undefined) {
+    payload.error_message = patch.errorMessage;
+  }
+
+  if (patch.externalTaskId !== undefined) {
+    payload.external_task_id = patch.externalTaskId;
+  }
+
+  if (patch.sourceImageUrl !== undefined) {
+    payload.source_image_url = patch.sourceImageUrl;
+  }
+
   const [row] = await patchRows<ImageTaskRow>(
     `image_tasks?user_id=eq.${userId}&external_task_id=eq.${externalTaskId}`,
-    {
-      ...patch,
-      result_image_urls: patch.resultImageUrls,
-      output_payload: patch.outputPayload,
-      error_message: patch.errorMessage,
-      updated_at: nowIso(),
-    },
+    payload,
   );
 
   return row ? mapImageTask(row) : null;
 }
 
 export async function updateImageTaskById(taskId: string, patch: ImageTaskPatchInput) {
+  const payload: Record<string, unknown> = {
+    updated_at: nowIso(),
+  };
+
+  if (patch.status !== undefined) {
+    payload.status = patch.status;
+  }
+
+  if (patch.outputPayload !== undefined) {
+    payload.output_payload = patch.outputPayload;
+  }
+
+  if (patch.resultImageUrls !== undefined) {
+    payload.result_image_urls = patch.resultImageUrls;
+  }
+
+  if (patch.errorMessage !== undefined) {
+    payload.error_message = patch.errorMessage;
+  }
+
+  if (patch.externalTaskId !== undefined) {
+    payload.external_task_id = patch.externalTaskId;
+  }
+
+  if (patch.sourceImageUrl !== undefined) {
+    payload.source_image_url = patch.sourceImageUrl;
+  }
+
   const [row] = await patchRows<ImageTaskRow>(
     `image_tasks?id=eq.${taskId}`,
-    {
-      ...patch,
-      result_image_urls: patch.resultImageUrls,
-      output_payload: patch.outputPayload,
-      error_message: patch.errorMessage,
-      updated_at: nowIso(),
-    },
+    payload,
   );
 
   return row ? mapImageTask(row) : null;
