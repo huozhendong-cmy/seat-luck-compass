@@ -11,8 +11,8 @@ type WeChatCreditModalProps = {
 export function WeChatCreditModal({ open, onClose, userId = "" }: WeChatCreditModalProps) {
   const [copied, setCopied] = useState(false);
 
-  const qrUrl = process.env.NEXT_PUBLIC_WECHAT_QR_URL || "";
-  const wechatId = process.env.NEXT_PUBLIC_WECHAT_ID || "请在环境变量里配置微信号";
+  const qrUrl = process.env.NEXT_PUBLIC_WECHAT_QR_URL || "/wechat-qr.jpg";
+  const wechatId = process.env.NEXT_PUBLIC_WECHAT_ID || "中山Ai小王子";
   const noteText = process.env.NEXT_PUBLIC_WECHAT_CONTACT_NOTE || "加微信后把 UID 发给我，我会在后台给你补赠额度。";
 
   const canCopy = useMemo(() => Boolean(userId), [userId]);
@@ -47,15 +47,7 @@ export function WeChatCreditModal({ open, onClose, userId = "" }: WeChatCreditMo
         </div>
 
         <div className="mt-5 rounded-[22px] border border-[rgba(188,156,108,0.16)] bg-[rgba(255,255,255,0.78)] p-4">
-          {qrUrl ? (
-            <img src={qrUrl} alt="微信二维码" className="mx-auto h-[180px] w-[180px] rounded-[18px] object-cover" />
-          ) : (
-            <div className="mx-auto flex h-[180px] w-[180px] items-center justify-center rounded-[18px] border border-dashed border-[rgba(188,156,108,0.36)] bg-[rgba(250,244,234,0.86)] px-4 text-center text-sm leading-6 text-[#8a7861]">
-              请在环境变量中配置
-              <br />
-              `NEXT_PUBLIC_WECHAT_QR_URL`
-            </div>
-          )}
+          <img src={qrUrl} alt="微信二维码" className="mx-auto h-[180px] w-[180px] rounded-[18px] object-cover" />
 
           <div className="mt-4 rounded-[18px] bg-[rgba(247,241,232,0.9)] px-4 py-3 text-center">
             <div className="text-[12px] tracking-[0.16em] text-[#a97a3c]">微信号</div>
