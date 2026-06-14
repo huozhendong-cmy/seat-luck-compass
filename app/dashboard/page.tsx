@@ -73,16 +73,42 @@ export default async function DashboardPage({
         <SectionHeading
           eyebrow="Admin"
           title="后台入口已锁定"
-          description="这个页面现在改成了你的手动运营后台，需要带后台密钥访问。"
+          description="这里不是用户充值页，而是你手动给别人补赠积分的后台。先输入后台密钥，进去后再粘贴用户 UID。"
         />
 
         <section className="glass-panel rounded-[32px] px-5 py-5">
-          <p className="text-sm leading-7 text-[var(--muted)]">
-            请用这样的方式打开：
-            <span className="mt-2 block rounded-[16px] bg-[rgba(255,255,255,0.68)] px-4 py-3 text-[13px] leading-6 text-[var(--text)]">
-              /dashboard?key=你的后台密钥
-            </span>
+          <div className="eyebrow">Step 1</div>
+          <h2 className="display-font mt-3 text-[28px] text-[var(--text)]">输入后台密钥进入</h2>
+          <p className="mt-2 text-sm leading-7 text-[var(--muted)]">
+            这个密钥就是你在 Vercel 里配置的 <code>ADMIN_DASHBOARD_KEY</code>。输入一次后，就能看到真正的补赠积分面板。
           </p>
+
+          <form action="/dashboard" method="GET" className="mt-5 space-y-4">
+            <div className="field-shell">
+              <div className="field-label">后台密钥</div>
+              <input
+                type="password"
+                name="key"
+                defaultValue={providedKey}
+                className="text-input"
+                placeholder="输入你的后台密钥"
+              />
+            </div>
+            <button type="submit" className="button-primary h-12 w-full text-sm">
+              进入补赠后台
+            </button>
+          </form>
+        </section>
+
+        <section className="glass-panel rounded-[32px] px-5 py-5">
+          <div className="eyebrow">Step 2</div>
+          <h2 className="display-font mt-3 text-[26px] text-[var(--text)]">进去以后怎么补积分</h2>
+          <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--muted)]">
+            <p>1. 用户把弹窗里的 UID 发给你。</p>
+            <p>2. 你把 UID 粘贴到后台。</p>
+            <p>3. 选择补 5 点、10 点，或者自己填数字。</p>
+            <p>4. 点“确认赠送”，用户马上就能继续使用。</p>
+          </div>
         </section>
       </main>
     );
